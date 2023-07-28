@@ -53,7 +53,7 @@ public:
 //------------------------------------------------------------------------
 protected:
     // These values are used for the processing.
-    float m_gain;
+    int m_gain;
     float m_delayLength;
     float m_dryMix;
     float m_wetMix;
@@ -74,6 +74,7 @@ private:
     float convertDryMixFromNormalized(Steinberg::Vst::ParamValue mDryMix);
     float convertWetMixFromNormalized(Steinberg::Vst::ParamValue mWetMix);
     float convertFeedbackFromNormalized(Steinberg::Vst::ParamValue mFeedback);
+    float interpolate(float fraction, float prevSample, float nextSample);
     
 };
 

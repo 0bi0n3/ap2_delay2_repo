@@ -184,11 +184,19 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
             const float in = channelData[i];
             float out = 0.0;
 
-            // Create an output sample based on input, delay buffer content, and dry/wet mix
-            out = (m_dryMix * in + m_wetMix * delayData[dpr]);
+            // Compute the fraction and the base index
+            float fraction = m_delayReadPosition - (int)m_delayReadPosition;
+            int index = (int)m_delayReadPosition;
+
+            // Create an output sample based on input, interpolated delay buffer content, and dry/wet mix
+            float interpolatedDelay = interpolate(fraction, delayData[index], delayData[(index + 1) % m_delayBufferLength]);
+            out = (m_dryMix * in + m_wetMix * interpolatedDelay);
 
             // Write the current input and feedback-scaled delay buffer content to the delay buffer
-            delayData[dpw] = in + (delayData[dpr] * m_feedback);
+            float newSample = in + (delayData[dpr] * m_feedback);
+            // Clip the new sample to prevent overflow
+            newSample = std::max(std::min(newSample, 0.8f), -0.8f);
+            delayData[dpw] = newSample;
             
             // Increment and wrap the delay buffer pointers
             if (++dpr >= m_delayBufferLength)
@@ -197,7 +205,9 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
                 dpw = 0;
             
             // Write the output sample to the output data
+            out = std::max(std::min(out, 1.0f), -1.0f);
             outputData[i] = out * m_gain;
+
         }
     }
         
@@ -273,7 +283,7 @@ tresult PLUGIN_API delay2Processor::getState (IBStream* state)
 
 void delay2Processor::resizeDelayBuffer()
 {
-    // Assuming you want a maximum delay of 1 second
+    // Assuming a maximum delay of 1 second
     m_delayBufferLength = static_cast<int>(m_sampleRate * 1.0);
     
     // Calculate the position to read from the delay buffer based on the current settings
@@ -309,7 +319,6 @@ float delay2Processor::convertDelayLengthFromNormalized(Steinberg::Vst::ParamVal
     return delayInSamples;
 }
 
-
 float delay2Processor::convertDryMixFromNormalized(Steinberg::Vst::ParamValue mDryMix)
 {
     return mDryMix;
@@ -327,6 +336,12 @@ float delay2Processor::convertFeedbackFromNormalized(Steinberg::Vst::ParamValue 
     float feedbackGainDB = mFeedback * (maxFeedbackGainDB - minFeedbackGainDB) + minFeedbackGainDB;
     return powf(10.0f, feedbackGainDB / 20.0f);
 }
+
+float delay2Processor::interpolate(float fraction, float prevSample, float nextSample)
+{
+    return fraction * nextSample + (1.0f - fraction) * prevSample;
+}
+
 
 //------------------------------------------------------------------------
 } // namespace delayEffectProcessor
