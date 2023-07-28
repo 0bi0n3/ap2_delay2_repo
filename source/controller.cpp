@@ -34,7 +34,7 @@ tresult PLUGIN_API delay2Controller::initialize (FUnknown* context)
                             AudioParams::kParamGainId,
                             0);
     
-    parameters.addParameter(STR16 ("Delay Length"),
+    parameters.addParameter(STR16 ("Delay Time"),
                             STR16 ("sec"),
                             0,
                             0.1,
@@ -85,14 +85,32 @@ tresult PLUGIN_API delay2Controller::setComponentState (IBStream* state)
     if (!state)
         return kResultFalse;
 
-    IBStreamer streamer (state, kLittleEndian);
-    float savedParam1 = 0.f;
-    if (streamer.readFloat (savedParam1) == false)
-        return kResultFalse;
-
-    // sync with our parameter
-    if (auto param = parameters.getParameter (AudioParams::kParamGainId))
-        param->setNormalized (savedParam1);
+//    IBStreamer streamer (state, kLittleEndian);
+//    float   savedParam1 = 0.0f,
+//            savedParam2 = 0.0f,
+//            savedParam3 = 0.0f,
+//            savedParam4 = 0.0f,
+//            savedParam5 = 0.0f;
+//
+//    if (   streamer.readFloat (savedParam1) == false
+//        || streamer.readFloat (savedParam2) == false
+//        || streamer.readFloat (savedParam3) == false
+//        || streamer.readFloat (savedParam4) == false
+//        || streamer.readFloat (savedParam5) == false
+//        )
+//        return kResultFalse;
+//
+//    // sync with our parameter
+//    if (auto param = parameters.getParameter (AudioParams::kParamGainId))
+//        param->setNormalized (savedParam1);
+//    if (auto param = parameters.getParameter (AudioParams::kParamDelayLengthId))
+//        param->setNormalized (savedParam2);
+//    if (auto param = parameters.getParameter (AudioParams::kParamDryMixId))
+//        param->setNormalized (savedParam3);
+//    if (auto param = parameters.getParameter (AudioParams::kParamWetMixId))
+//        param->setNormalized (savedParam4);
+//    if (auto param = parameters.getParameter (AudioParams::kParamFeedbackId))
+//        param->setNormalized (savedParam5);
 
     return kResultOk;
 }
