@@ -1,5 +1,7 @@
 //------------------------------------------------------------------------
 // Copyright(c) 2023 Oberon Day-West.
+// This script was adapted and referenced from Reiss and McPherson (2015) and Tarr (2019).
+// Please refer to accompanying report reference list for full reference details.
 //------------------------------------------------------------------------
 
 #pragma once
@@ -54,9 +56,9 @@ protected:
     Steinberg::Vst::ParamValue mGain = 1.0;
     
     float delayLength_;
-    float dryMix_;
-    float wetMix_;
-    float feedback_;
+    float dryMix_ = 0.5f;
+    float wetMix_ = 0.5f;
+    float feedback_ = 0.2f;
     
 private:
     std::vector<std::vector<float>> delayBuffer;
