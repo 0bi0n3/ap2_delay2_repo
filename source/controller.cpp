@@ -61,7 +61,7 @@ tresult PLUGIN_API delay2Controller::initialize (FUnknown* context)
     parameters.addParameter(STR16 ("Feedback Gain"),
                             STR16 ("dB"),
                             0,
-                            0.5,
+                            0.0,
                             Vst::ParameterInfo::kCanAutomate,
                             AudioParams::kParamFeedbackId,
                             0);
