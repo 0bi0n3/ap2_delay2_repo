@@ -59,12 +59,13 @@ protected:
     float feedback_;
     
 private:
-    AudioEffect delayBuffer;
+    std::vector<std::vector<float>> delayBuffer;
     int delayBufferLength_;
     int delayReadPosition_;
-    int delayWritePostion_;
+    int delayWritePosition_;
+    double sampleRate_;
     
-  
+    void resizeDelayBuffer();
     
 };
 

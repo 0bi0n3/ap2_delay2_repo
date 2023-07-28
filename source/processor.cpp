@@ -19,11 +19,18 @@ delay2Processor::delay2Processor ()
 {
 	//--- set the wanted controller for our processor
 	setControllerClass (kdelay2ControllerUID);
+    delayBufferLength_ = 44100; // for example, a delay of 1 second at 44100Hz sample rate
+    delayReadPosition_ = 0;
+    delayWritePosition_ = 0;
+    
+    // initialize delay buffer
+    delayBuffer.resize(2, std::vector<float>(delayBufferLength_, 0.0f));
 }
 
 //------------------------------------------------------------------------
 delay2Processor::~delay2Processor ()
-{}
+{
+}
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API delay2Processor::initialize (FUnknown* context)
@@ -94,12 +101,15 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
         }
 	
 	//--- Here you have to implement your processing
-    //-- Flush case: we only need to update parameter, noprocessing possible
+    //-- Flush case: we only need to update parameter, no processing possible
     if (data.numInputs == 0 || data.numSamples == 0)
         return kResultOk;
 
     //--- Here you have to implement your processing
     int32 numChannels = data.inputs[0].numChannels;
+    
+    int delayReadPtr;
+    int delayWritePtr;
 
     //---get audio buffers using helper-functions(vstaudioprocessoralgo.h)-------------
     uint32 sampleFramesSize = getSampleFramesSizeInBytes(processSetup, data.numSamples);
@@ -155,8 +165,15 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
 //------------------------------------------------------------------------
 tresult PLUGIN_API delay2Processor::setupProcessing (Vst::ProcessSetup& newSetup)
 {
-	//--- called before any processing ----
-	return AudioEffect::setupProcessing (newSetup);
+    // Check for sample rate changes
+    if (sampleRate_ != newSetup.sampleRate)
+    {
+        sampleRate_ = newSetup.sampleRate;
+        resizeDelayBuffer();
+    }
+
+    // Let the parent class also handle this call
+    return AudioEffect::setupProcessing(newSetup);
 }
 
 //------------------------------------------------------------------------
@@ -197,6 +214,15 @@ tresult PLUGIN_API delay2Processor::getState (IBStream* state)
     IBStreamer streamer (state, kLittleEndian);
     streamer.writeFloat (toSaveParam1);
     return kResultOk;
+}
+
+void delay2Processor::resizeDelayBuffer()
+{
+    // Assuming you want a maximum delay of 1 second
+    delayBufferLength_ = static_cast<int>(sampleRate_ * 1.0);
+
+    // Initialize for two channels (stereo). Increase this if you want more channels.
+    delayBuffer.resize(2, std::vector<float>(delayBufferLength_, 0.0f));
 }
 
 //------------------------------------------------------------------------
