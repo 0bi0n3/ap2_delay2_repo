@@ -19,6 +19,8 @@ public:
 	delay2Processor ();
 	~delay2Processor () SMTG_OVERRIDE;
 
+    static const int kNumTaps = 4;
+    
     // Create function
 	static Steinberg::FUnknown* createInstance (void* /*context*/) 
 	{ 
@@ -53,16 +55,16 @@ public:
 //------------------------------------------------------------------------
 protected:
     // These values are used for the processing.
-    int m_gain;
-    float m_delayLength;
+    std::vector<float> m_gain;
+    std::vector<float> m_delayLength;
+    std::vector<float> m_feedback;
     float m_dryMix;
     float m_wetMix;
-    float m_feedback;
     
 private:
     std::vector<std::vector<float>> m_delayBuffer;
     int m_delayBufferLength;
-    int m_delayReadPosition;
+    std::vector<int> m_delayReadPosition;
     int m_delayWritePosition;
     double m_sampleRate;
     

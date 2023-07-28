@@ -184,19 +184,15 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
             const float in = channelData[i];
             float out = 0.0;
 
-            // Compute the fraction and the base index
-            float fraction = m_delayReadPosition - (int)m_delayReadPosition;
-            int index = (int)m_delayReadPosition;
-
-            // Create an output sample based on input, interpolated delay buffer content, and dry/wet mix
-            float interpolatedDelay = interpolate(fraction, delayData[index], delayData[(index + 1) % m_delayBufferLength]);
-            out = (m_dryMix * in + m_wetMix * interpolatedDelay);
+            // Create an output sample based on input, delay buffer content, and dry/wet mix
+            out = (m_dryMix * in + m_wetMix * delayData[dpr]);
 
             // Write the current input and feedback-scaled delay buffer content to the delay buffer
             float newSample = in + (delayData[dpr] * m_feedback);
             // Clip the new sample to prevent overflow
             newSample = std::max(std::min(newSample, 0.8f), -0.8f);
             delayData[dpw] = newSample;
+
             
             // Increment and wrap the delay buffer pointers
             if (++dpr >= m_delayBufferLength)
