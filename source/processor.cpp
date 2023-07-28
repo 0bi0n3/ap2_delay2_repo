@@ -245,7 +245,11 @@ tresult PLUGIN_API delay2Processor::getState (IBStream* state)
 void delay2Processor::resizeDelayBuffer()
 {
     // Assuming you want a maximum delay of 1 second
-    m_delayBufferLength = static_cast<int>(m_sampleRate * 1.0);
+    m_delayBufferLength = static_cast<int>(m_sampleRate * 2.0);
+    
+    // Calculate the position to read from the delay buffer based on the current settings
+    // and make sure the read position wraps around in a circular manner using the modulo operator.
+    m_delayReadPosition = static_cast<int>(m_delayWritePosition - (m_delayLength * m_sampleRate) + m_delayBufferLength) % m_delayBufferLength;
 
     // Initialize for two channels (stereo). Increase this if you want more channels.
     m_delayBuffer.resize(2, std::vector<float>(m_delayBufferLength, 0.0f));
