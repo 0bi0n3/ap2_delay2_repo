@@ -1,5 +1,7 @@
 //------------------------------------------------------------------------
 // Copyright(c) 2023 Oberon Day-West.
+// This script was adapted and referenced from Reiss and McPherson (2015) and Tarr (2019).
+// Please refer to accompanying report reference list for full reference details.
 //------------------------------------------------------------------------
 
 #pragma once
@@ -53,17 +55,17 @@ protected:
     // These values are used for the processing.
     Steinberg::Vst::ParamValue mGain = 1.0;
     
-    float delayLength_;
-    float dryMix_;
-    float wetMix_;
-    float feedback_;
+    float m_delayLength;
+    float m_dryMix;
+    float m_wetMix;
+    float m_feedback;
     
 private:
-    std::vector<std::vector<float>> delayBuffer;
-    int delayBufferLength_;
-    int delayReadPosition_;
-    int delayWritePosition_;
-    double sampleRate_;
+    std::vector<std::vector<float>> m_delayBuffer;
+    int m_delayBufferLength;
+    int m_delayReadPosition;
+    int m_delayWritePosition;
+    double m_sampleRate;
     
     void resizeDelayBuffer();
     

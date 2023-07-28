@@ -1,5 +1,7 @@
 //------------------------------------------------------------------------
 // Copyright(c) 2023 Oberon Day-West.
+// This script was adapted and referenced from Reiss and McPherson (2015) and Tarr (2019).
+// Please refer to accompanying report reference list for full reference details.
 //------------------------------------------------------------------------
 
 #include "processor.h"
@@ -19,12 +21,19 @@ delay2Processor::delay2Processor ()
 {
 	//--- set the wanted controller for our processor
 	setControllerClass (kdelay2ControllerUID);
-    delayBufferLength_ = 44100; // for example, a delay of 1 second at 44100Hz sample rate
-    delayReadPosition_ = 0;
-    delayWritePosition_ = 0;
+    
+    // set initial delay line values
+    m_delayBufferLength = 44100; // delay length/time
+    m_delayLength = 0.5f;
+    m_dryMix = 1.0f;
+    m_wetMix = 0.5f;
+    m_feedback = 0.75f;
+    
+    m_delayReadPosition = 0;
+    m_delayWritePosition = 0;
     
     // initialize delay buffer
-    delayBuffer.resize(2, std::vector<float>(delayBufferLength_, 0.0f));
+    m_delayBuffer.resize(2, std::vector<float>(m_delayBufferLength, 0.0f));
 }
 
 //------------------------------------------------------------------------
@@ -74,101 +83,118 @@ tresult PLUGIN_API delay2Processor::setActive (TBool state)
 //------------------------------------------------------------------------
 tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
 {
-    //--- First: Read inputs parameter changes-----------
-        if (data.inputParameterChanges)
+    // Check if there are any changes in the input parameters
+    if (data.inputParameterChanges)
+    {
+        // Get the number of parameters that have changed
+        int32 numParamsChanged = data.inputParameterChanges->getParameterCount ();
+
+        // Iterate through each changed parameter
+        for (int32 index = 0; index < numParamsChanged; index++)
         {
-            // for each parameter defined by its ID
-            int32 numParamsChanged = data.inputParameterChanges->getParameterCount ();
-            for (int32 index = 0; index < numParamsChanged; index++)
+            // Get the queue of parameter values for this parameter
+            Vst::IParamValueQueue* paramQueue = data.inputParameterChanges->getParameterData (index);
+
+            // If the queue is valid, we process the changes
+            if (paramQueue)
             {
-                // for this parameter we could iterate the list of value changes (could 1 per audio block or more!)
-                // in this example we get only the last value (getPointCount - 1)
-                Vst::IParamValueQueue* paramQueue = data.inputParameterChanges->getParameterData (index);
-                if (paramQueue)
+                Vst::ParamValue value;
+                int32 sampleOffset;
+                int32 numPoints = paramQueue->getPointCount ();
+
+                // Check which parameter has changed
+                switch (paramQueue->getParameterId ())
                 {
-                    Vst::ParamValue value;
-                    int32 sampleOffset;
-                    int32 numPoints = paramQueue->getPointCount ();
-                    switch (paramQueue->getParameterId ())
-                    {
-                        case AudioParams::kParamGainId:
-                            if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
-                                mGain = value;
-                            break;
-                    }
+                    // In this case, we're only handling changes to gain
+                    case AudioParams::kParamGainId:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
+                            // Update our internal gain value with the new value
+                            mGain = value;
+                        break;
                 }
             }
         }
-	
-	//--- Here you have to implement your processing
-    //-- Flush case: we only need to update parameter, no processing possible
+    }
+    
+    // If there's no data to process, return
     if (data.numInputs == 0 || data.numSamples == 0)
         return kResultOk;
 
-    //--- Here you have to implement your processing
+    // Get the number of channels and samples
     int32 numChannels = data.inputs[0].numChannels;
+    int32 numSamples = data.numSamples;
     
-    int delayReadPtr;
-    int delayWritePtr;
-
-    //---get audio buffers using helper-functions(vstaudioprocessoralgo.h)-------------
-    uint32 sampleFramesSize = getSampleFramesSizeInBytes(processSetup, data.numSamples);
+    // Initialize delay buffer pointers
+    int32 dpr = m_delayReadPosition;
+    int32 dpw = m_delayWritePosition;
+    
+    // Get input and output buffer pointers
     void** in = getChannelBuffersPointer (processSetup, data.inputs[0]);
     void** out = getChannelBuffersPointer (processSetup, data.outputs[0]);
 
-    // Here could check the silent flags
-    // now we will produce the output
-    // mark our outputs has not silent
+    // Initially set the output silence flag to 0, assuming there will be sound
     data.outputs[0].silenceFlags = 0;
 
-    float gain = mGain;
-    // for each channel (left and right)
-    for (int32 i = 0; i < numChannels; i++)
+    // Iterate over each channel
+    for (int32 channel = 0; channel < numChannels; ++channel)
     {
-        int32 samples = data.numSamples;
-        Vst::Sample32* ptrIn = (Vst::Sample32*)in[i];
-        Vst::Sample32* ptrOut = (Vst::Sample32*)out[i];
-        Vst::Sample32 tmp;
-        // for each sample in this channel
-        while (--samples >= 0)
-        {
-            // apply gain
-            tmp = (*ptrIn++) * gain;
-            (*ptrOut++) = tmp;
-        }
-    }
-    
-    // Here could check the silent flags
-    //---check if silence---------------
-    // normally we have to check each channel (simplification)
-    if (data.inputs[0].silenceFlags != 0)
-    {
-        // mark output silence too
-        data.outputs[0].silenceFlags = data.inputs[0].silenceFlags;
+        // Get input data for this channel
+        Vst::Sample32* channelData = static_cast<Vst::Sample32*>(in[channel]);
         
-        // the plug-in has to be sure that if it sets the flags silence that the output buffer are clear
-        for (int32 i = 0; i < numChannels; i++)
+        // Get output data for this channel
+        Vst::Sample32* outputData = static_cast<Vst::Sample32*>(out[channel]);
+
+        // Get delay buffer data for this channel
+        float* delayData = m_delayBuffer[std::min(channel, (int)m_delayBuffer.size() - 1)].data();
+        
+        // Process each sample
+        for (int32 i = 0; i < numSamples; ++i)
         {
-            // do not need to be cleared if the buffers are the same (in this case input buffer are
-            // already cleared by the host)
-            if (in[i] != out[i])
-            {
-                memset (out[i], 0, sampleFramesSize);
-            }
+            // Get the current input sample
+            const float in = channelData[i];
+            float out = 0.0;
+
+            // Create an output sample based on input, delay buffer content, and dry/wet mix
+            out = (m_dryMix * in + m_wetMix * delayData[dpr]);
+
+            // Write the current input and feedback-scaled delay buffer content to the delay buffer
+            delayData[dpw] = in + (delayData[dpr] * m_feedback);
+            
+            // Increment and wrap the delay buffer pointers
+            if (++dpr >= m_delayBufferLength)
+                dpr = 0;
+            if (++dpw >= m_delayBufferLength)
+                dpw = 0;
+            
+            // Write the output sample to the output data
+            outputData[i] = out * mGain;
         }
-        // nothing to do at this point
+    }
+        
+    // Update delay buffer pointers for the next block
+    m_delayReadPosition = dpr;
+    m_delayWritePosition = dpw;
+
+    // If there are more output channels than input channels, clear the remaining channels
+    for (int32 i = numChannels; i < data.numOutputs; ++i)
+    {
+        // Clear channel data by setting it to zero
+        memset (out[i], 0, numSamples * sizeof(Vst::Sample32));
     }
     
-	return kResultOk;
+    // Everything processed successfully
+    return kResultOk;
 }
+
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API delay2Processor::setupProcessing (Vst::ProcessSetup& newSetup)
 {
     // Check for sample rate changes
-    if (sampleRate_ != newSetup.sampleRate)
+    if (m_sampleRate != newSetup.sampleRate)
     {
-        sampleRate_ = newSetup.sampleRate;
+        m_sampleRate = newSetup.sampleRate;
         resizeDelayBuffer();
     }
 
@@ -219,10 +245,10 @@ tresult PLUGIN_API delay2Processor::getState (IBStream* state)
 void delay2Processor::resizeDelayBuffer()
 {
     // Assuming you want a maximum delay of 1 second
-    delayBufferLength_ = static_cast<int>(sampleRate_ * 1.0);
+    m_delayBufferLength = static_cast<int>(m_sampleRate * 1.0);
 
     // Initialize for two channels (stereo). Increase this if you want more channels.
-    delayBuffer.resize(2, std::vector<float>(delayBufferLength_, 0.0f));
+    m_delayBuffer.resize(2, std::vector<float>(m_delayBufferLength, 0.0f));
 }
 
 //------------------------------------------------------------------------
