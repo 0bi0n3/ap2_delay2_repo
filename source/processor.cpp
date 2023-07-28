@@ -21,12 +21,12 @@ delay2Processor::delay2Processor ()
 {
 	//--- set the wanted controller for our processor
 	setControllerClass (kdelay2ControllerUID);
-    delayBufferLength_ = 44100; // delay length/time, a delay of 1 second at 44100Hz sample rate
-    delayReadPosition_ = 0;
-    delayWritePosition_ = 0;
+    m_delayBufferLength = 44100; // delay length/time, a delay of 1 second at 44100Hz sample rate
+    m_delayReadPosition = 0;
+    m_delayWritePosition = 0;
     
     // initialize delay buffer
-    delayBuffer.resize(2, std::vector<float>(delayBufferLength_, 0.0f));
+    m_delayBuffer.resize(2, std::vector<float>(m_delayBufferLength, 0.0f));
 }
 
 //------------------------------------------------------------------------
@@ -119,8 +119,8 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
     int32 numSamples = data.numSamples;
     
     // Initialize delay buffer pointers
-    int32 dpr = delayReadPosition_;
-    int32 dpw = delayWritePosition_;
+    int32 dpr = m_delayReadPosition;
+    int32 dpw = m_delayWritePosition;
     
     // Get input and output buffer pointers
     void** in = getChannelBuffersPointer (processSetup, data.inputs[0]);
@@ -139,7 +139,7 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
         Vst::Sample32* outputData = static_cast<Vst::Sample32*>(out[channel]);
 
         // Get delay buffer data for this channel
-        float* delayData = delayBuffer[std::min(channel, (int)delayBuffer.size() - 1)].data();
+        float* delayData = m_delayBuffer[std::min(channel, (int)m_delayBuffer.size() - 1)].data();
         
         // Process each sample
         for (int32 i = 0; i < numSamples; ++i)
@@ -149,15 +149,15 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
             float out = 0.0;
 
             // Create an output sample based on input, delay buffer content, and dry/wet mix
-            out = (dryMix_ * in + wetMix_ * delayData[dpr]);
+            out = (m_dryMix * in + m_wetMix * delayData[dpr]);
 
             // Write the current input and feedback-scaled delay buffer content to the delay buffer
-            delayData[dpw] = in + (delayData[dpr] * feedback_);
+            delayData[dpw] = in + (delayData[dpr] * m_feedback);
             
             // Increment and wrap the delay buffer pointers
-            if (++dpr >= delayBufferLength_)
+            if (++dpr >= m_delayBufferLength)
                 dpr = 0;
-            if (++dpw >= delayBufferLength_)
+            if (++dpw >= m_delayBufferLength)
                 dpw = 0;
             
             // Write the output sample to the output data
@@ -166,8 +166,8 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
     }
         
     // Update delay buffer pointers for the next block
-    delayReadPosition_ = dpr;
-    delayWritePosition_ = dpw;
+    m_delayReadPosition = dpr;
+    m_delayWritePosition = dpw;
 
     // If there are more output channels than input channels, clear the remaining channels
     for (int32 i = numChannels; i < data.numOutputs; ++i)
@@ -185,9 +185,9 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
 tresult PLUGIN_API delay2Processor::setupProcessing (Vst::ProcessSetup& newSetup)
 {
     // Check for sample rate changes
-    if (sampleRate_ != newSetup.sampleRate)
+    if (m_sampleRate != newSetup.sampleRate)
     {
-        sampleRate_ = newSetup.sampleRate;
+        m_sampleRate = newSetup.sampleRate;
         resizeDelayBuffer();
     }
 
@@ -238,10 +238,10 @@ tresult PLUGIN_API delay2Processor::getState (IBStream* state)
 void delay2Processor::resizeDelayBuffer()
 {
     // Assuming you want a maximum delay of 1 second
-    delayBufferLength_ = static_cast<int>(sampleRate_ * 1.0);
+    m_delayBufferLength = static_cast<int>(m_sampleRate * 1.0);
 
     // Initialize for two channels (stereo). Increase this if you want more channels.
-    delayBuffer.resize(2, std::vector<float>(delayBufferLength_, 0.0f));
+    m_delayBuffer.resize(2, std::vector<float>(m_delayBufferLength, 0.0f));
 }
 
 //------------------------------------------------------------------------
