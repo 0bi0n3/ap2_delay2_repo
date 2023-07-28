@@ -7,6 +7,11 @@
 #include "pluginterfaces/base/funknown.h"
 #include "pluginterfaces/vst/vsttypes.h"
 
+enum AudioParams : Steinberg::Vst::ParamID
+{
+    kParamGainId = 102, // should be a unique id...
+};
+
 namespace delayEffectProcessor {
 //------------------------------------------------------------------------
 static const Steinberg::FUID kdelay2ProcessorUID (0x13064EA4, 0x6325587E, 0xA4C5EA2C, 0xA0335013);

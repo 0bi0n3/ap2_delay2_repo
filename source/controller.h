@@ -5,6 +5,7 @@
 #pragma once
 
 #include "public.sdk/source/vst/vsteditcontroller.h"
+#include "pluginterfaces/vst/vsttypes.h"
 
 namespace delayEffectProcessor {
 
