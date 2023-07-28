@@ -66,12 +66,15 @@ private:
     int m_delayWritePosition;
     double m_sampleRate;
     
+    void setDelayLength(float newDelayLength);
     void resizeDelayBuffer();
+    
     float convertGainFromNormalized(Steinberg::Vst::ParamValue mGain);
     float convertDelayLengthFromNormalized(Steinberg::Vst::ParamValue mDelayLength);
     float convertDryMixFromNormalized(Steinberg::Vst::ParamValue mDryMix);
     float convertWetMixFromNormalized(Steinberg::Vst::ParamValue mWetMix);
     float convertFeedbackFromNormalized(Steinberg::Vst::ParamValue mFeedback);
+    
 };
 
 //------------------------------------------------------------------------
