@@ -52,6 +52,21 @@ public:
 protected:
     // These values are used for the processing.
     Steinberg::Vst::ParamValue mGain = 1.0;
+    
+    float delayLength_;
+    float dryMix_;
+    float wetMix_;
+    float feedback_;
+    
+private:
+    std::vector<std::vector<float>> delayBuffer;
+    int delayBufferLength_;
+    int delayReadPosition_;
+    int delayWritePosition_;
+    double sampleRate_;
+    
+    void resizeDelayBuffer();
+    
 };
 
 //------------------------------------------------------------------------

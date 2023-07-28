@@ -26,14 +26,46 @@ tresult PLUGIN_API delay2Controller::initialize (FUnknown* context)
 	}
 
     //---Create Parameters------------
-   parameters.addParameter (STR16 ("Gain"),
+   parameters.addParameter (STR16 ("Master Gain"),
                             STR16 ("dB"),
                             0,
                             0.5,
                             Vst::ParameterInfo::kCanAutomate,
                             AudioParams::kParamGainId,
                             0);
-
+    
+    parameters.addParameter(STR16 ("Delay Length"),
+                            STR16 ("sec"),
+                            0,
+                            0.1,
+                            Vst::ParameterInfo::kCanAutomate,
+                            AudioParams::kParamDelayLengthId,
+                            0);
+    
+    parameters.addParameter(STR16 ("Dry Mix"),
+                            STR16 ("%"),
+                            0,
+                            0.5,
+                            Vst::ParameterInfo::kCanAutomate,
+                            AudioParams::kParamDryMixId,
+                            0);
+    
+    parameters.addParameter(STR16 ("Wet Mix"),
+                            STR16 ("%"),
+                            0,
+                            0.5,
+                            Vst::ParameterInfo::kCanAutomate,
+                            AudioParams::kParamWetMixId,
+                            0);
+    
+    parameters.addParameter(STR16 ("Feedback Gain"),
+                            STR16 ("dB"),
+                            0,
+                            0.5,
+                            Vst::ParameterInfo::kCanAutomate,
+                            AudioParams::kParamFeedbackId,
+                            0);
+    
 	return result;
 }
 
