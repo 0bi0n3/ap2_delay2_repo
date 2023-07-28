@@ -55,16 +55,16 @@ public:
 //------------------------------------------------------------------------
 protected:
     // These values are used for the processing.
-    std::vector<float> m_gain;
-    std::vector<float> m_delayLength;
-    std::vector<float> m_feedback;
+    int m_gain;
+    float m_delayLength;
     float m_dryMix;
     float m_wetMix;
+    float m_feedback;
     
 private:
     std::vector<std::vector<float>> m_delayBuffer;
     int m_delayBufferLength;
-    std::vector<int> m_delayReadPosition;
+    int m_delayReadPosition;
     int m_delayWritePosition;
     double m_sampleRate;
     
@@ -77,7 +77,7 @@ private:
     float convertWetMixFromNormalized(Steinberg::Vst::ParamValue mWetMix);
     float convertFeedbackFromNormalized(Steinberg::Vst::ParamValue mFeedback);
     float interpolate(float fraction, float prevSample, float nextSample);
-    
+
 };
 
 //------------------------------------------------------------------------
