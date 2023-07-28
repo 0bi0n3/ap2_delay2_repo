@@ -22,8 +22,8 @@ delay2Processor::delay2Processor ()
 	//--- set the wanted controller for our processor
 	setControllerClass (kdelay2ControllerUID);
     
-    // set initial delay line values
-    m_delayBufferLength = 44100; // delay length/time
+    m_gain = 1.0f;
+//
     m_delayLength = 0.5f;
     m_dryMix = 1.0f;
     m_wetMix = 0.5f;
@@ -33,7 +33,8 @@ delay2Processor::delay2Processor ()
     m_delayWritePosition = 0;
     
     // initialize delay buffer
-    m_delayBuffer.resize(2, std::vector<float>(m_delayBufferLength, 0.0f));
+    m_delayBufferLength = 0;
+    m_delayBuffer = std::vector<std::vector<float>>();
 }
 
 //------------------------------------------------------------------------
@@ -110,7 +111,35 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
                         // Get the most recent value of the parameter
                         if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
                             // Update our internal gain value with the new value
-                            mGain = value;
+                            m_gain = convertGainFromNormalized(value);
+                        break;
+                        
+                    case AudioParams::kParamDelayLengthId:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
+                            // Update internal delay length value with the new value
+                            setDelayLength(convertDelayLengthFromNormalized(value));
+                        break;
+                        
+                    case AudioParams::kParamDryMixId:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
+                            // Update our internal gain value with the new value
+                            m_dryMix = convertDryMixFromNormalized(value);
+                        break;
+                        
+                    case AudioParams::kParamWetMixId:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
+                            // Update our internal gain value with the new value
+                            m_wetMix = convertWetMixFromNormalized(value);
+                        break;
+                        
+                    case AudioParams::kParamFeedbackId:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
+                            // Update our internal gain value with the new value
+                            m_feedback = convertFeedbackFromNormalized(value);
                         break;
                 }
             }
@@ -168,7 +197,7 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
                 dpw = 0;
             
             // Write the output sample to the output data
-            outputData[i] = out * mGain;
+            outputData[i] = out * m_gain;
         }
     }
         
@@ -196,8 +225,9 @@ tresult PLUGIN_API delay2Processor::setupProcessing (Vst::ProcessSetup& newSetup
     {
         m_sampleRate = newSetup.sampleRate;
         resizeDelayBuffer();
+        setDelayLength(m_delayLength);
     }
-
+    
     // Let the parent class also handle this call
     return AudioEffect::setupProcessing(newSetup);
 }
@@ -227,7 +257,7 @@ tresult PLUGIN_API delay2Processor::setState (IBStream* state)
     float savedParam1 = 0.f;
     if (streamer.readFloat (savedParam1) == false)
         return kResultFalse;
-    mGain = savedParam1;
+    m_gain = savedParam1;
 
     return kResultOk;
 }
@@ -236,19 +266,76 @@ tresult PLUGIN_API delay2Processor::setState (IBStream* state)
 tresult PLUGIN_API delay2Processor::getState (IBStream* state)
 {
     // here we need to save the model (preset or project)
-    float toSaveParam1 = mGain;
+    float toSaveParam1 = m_gain;
     IBStreamer streamer (state, kLittleEndian);
     streamer.writeFloat (toSaveParam1);
     return kResultOk;
+}
+
+//------------------------------------------------------------------------
+//----------------------arthor implemented functions-----------------------
+//------------------------------------------------------------------------
+
+void delay2Processor::setDelayLength(float newDelayLength)
+{
+    m_delayLength = newDelayLength;
+
+    // Calculate the position to read from the delay buffer based on the new delay length
+    m_delayReadPosition = static_cast<int>(m_delayWritePosition - (m_delayLength * m_sampleRate) + m_delayBufferLength) % m_delayBufferLength;
 }
 
 void delay2Processor::resizeDelayBuffer()
 {
     // Assuming you want a maximum delay of 1 second
     m_delayBufferLength = static_cast<int>(m_sampleRate * 1.0);
+    
+    // Calculate the position to read from the delay buffer based on the current settings
+    // and make sure the read position wraps around in a circular manner using the modulo operator.
+    m_delayReadPosition = static_cast<int>(m_delayWritePosition - (m_delayLength * m_sampleRate) + m_delayBufferLength) % m_delayBufferLength;
 
-    // Initialize for two channels (stereo). Increase this if you want more channels.
-    m_delayBuffer.resize(2, std::vector<float>(m_delayBufferLength, 0.0f));
+    // Initialize delay buffer for each channel
+    int32 numChannels = this->getBusCount(Vst::kAudio, Vst::kInput);
+    m_delayBuffer.resize(numChannels);
+    
+    // Resize each channel's buffer
+    for (int32 channel = 0; channel < numChannels; ++channel)
+    {
+        m_delayBuffer[channel].resize(m_delayBufferLength, 0.0f);
+    }
+}
+
+float delay2Processor::convertGainFromNormalized(Steinberg::Vst::ParamValue mGain)
+{
+    float minGainDB = -60.0f;
+    float maxGainDB = 0.0f;
+    float gainDB = mGain * (maxGainDB - minGainDB) + minGainDB;
+    return powf(10.0f, gainDB / 20.0f);
+}
+
+float delay2Processor::convertDelayLengthFromNormalized(Steinberg::Vst::ParamValue mDelayLength)
+{
+    float minDelaySec = 0.0f;
+    float maxDelaySec = 1.0f;
+    float delaySec = mDelayLength * (maxDelaySec - minDelaySec) + minDelaySec;
+    return delaySec;
+}
+
+float delay2Processor::convertDryMixFromNormalized(Steinberg::Vst::ParamValue mDryMix)
+{
+    return mDryMix;
+}
+
+float delay2Processor::convertWetMixFromNormalized(Steinberg::Vst::ParamValue mWetMix)
+{
+    return mWetMix;
+}
+
+float delay2Processor::convertFeedbackFromNormalized(Steinberg::Vst::ParamValue mFeedback)
+{
+    float minFeedbackGainDB = -60.0f;
+    float maxFeedbackGainDB = 0.0f;
+    float feedbackGainDB = mFeedback * (maxFeedbackGainDB - minFeedbackGainDB) + minFeedbackGainDB;
+    return powf(10.0f, feedbackGainDB / 20.0f);
 }
 
 //------------------------------------------------------------------------

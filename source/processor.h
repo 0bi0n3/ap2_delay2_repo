@@ -53,8 +53,7 @@ public:
 //------------------------------------------------------------------------
 protected:
     // These values are used for the processing.
-    Steinberg::Vst::ParamValue mGain = 1.0;
-    
+    float m_gain;
     float m_delayLength;
     float m_dryMix;
     float m_wetMix;
@@ -67,7 +66,14 @@ private:
     int m_delayWritePosition;
     double m_sampleRate;
     
+    void setDelayLength(float newDelayLength);
     void resizeDelayBuffer();
+    
+    float convertGainFromNormalized(Steinberg::Vst::ParamValue mGain);
+    float convertDelayLengthFromNormalized(Steinberg::Vst::ParamValue mDelayLength);
+    float convertDryMixFromNormalized(Steinberg::Vst::ParamValue mDryMix);
+    float convertWetMixFromNormalized(Steinberg::Vst::ParamValue mWetMix);
+    float convertFeedbackFromNormalized(Steinberg::Vst::ParamValue mFeedback);
     
 };
 

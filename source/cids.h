@@ -14,7 +14,6 @@ enum AudioParams : Steinberg::Vst::ParamID
     kParamDryMixId = 104,
     kParamWetMixId = 105,
     kParamFeedbackId = 106,
-    kParamNumParametersId = 107,
 };
 
 namespace delayEffectProcessor {
