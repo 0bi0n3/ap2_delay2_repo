@@ -56,9 +56,9 @@ protected:
     Steinberg::Vst::ParamValue mGain = 1.0;
     
     float m_delayLength;
-    float m_dryMix = 0.5f;
-    float m_wetMix = 0.5f;
-    float m_feedback = 0.2f;
+    float m_dryMix;
+    float m_wetMix;
+    float m_feedback;
     
 private:
     std::vector<std::vector<float>> m_delayBuffer;

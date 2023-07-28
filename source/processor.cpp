@@ -21,7 +21,14 @@ delay2Processor::delay2Processor ()
 {
 	//--- set the wanted controller for our processor
 	setControllerClass (kdelay2ControllerUID);
-    m_delayBufferLength = 44100; // delay length/time, a delay of 1 second at 44100Hz sample rate
+    
+    // set initial delay line values
+    m_delayBufferLength = 44100; // delay length/time
+    m_delayLength = 0.5f;
+    m_dryMix = 1.0f;
+    m_wetMix = 0.5f;
+    m_feedback = 0.75f;
+    
     m_delayReadPosition = 0;
     m_delayWritePosition = 0;
     
@@ -161,7 +168,7 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
                 dpw = 0;
             
             // Write the output sample to the output data
-            outputData[i] = out;
+            outputData[i] = out * mGain;
         }
     }
         
