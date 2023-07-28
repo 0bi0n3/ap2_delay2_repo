@@ -117,8 +117,8 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
                     case AudioParams::kParamDelayLengthId:
                         // Get the most recent value of the parameter
                         if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
-                            // Update our internal gain value with the new value
-                            m_delayLength = convertDelayLengthFromNormalized(value);
+                            // Update internal delay length value with the new value
+                            setDelayLength(convertDelayLengthFromNormalized(value));
                         break;
                         
                     case AudioParams::kParamDryMixId:
@@ -235,8 +235,9 @@ tresult PLUGIN_API delay2Processor::setupProcessing (Vst::ProcessSetup& newSetup
     {
         m_sampleRate = newSetup.sampleRate;
         resizeDelayBuffer();
+        setDelayLength(m_delayLength);
     }
-
+    
     // Let the parent class also handle this call
     return AudioEffect::setupProcessing(newSetup);
 }
@@ -281,6 +282,18 @@ tresult PLUGIN_API delay2Processor::getState (IBStream* state)
     return kResultOk;
 }
 
+//------------------------------------------------------------------------
+//----------------------arthor implemented functions-----------------------
+//------------------------------------------------------------------------
+
+void delay2Processor::setDelayLength(float newDelayLength)
+{
+    m_delayLength = newDelayLength;
+
+    // Calculate the position to read from the delay buffer based on the new delay length
+    m_delayReadPosition = static_cast<int>(m_delayWritePosition - (m_delayLength * m_sampleRate) + m_delayBufferLength) % m_delayBufferLength;
+}
+
 void delay2Processor::resizeDelayBuffer()
 {
     // Assuming you want a maximum delay of 1 second
@@ -288,10 +301,17 @@ void delay2Processor::resizeDelayBuffer()
     
     // Calculate the position to read from the delay buffer based on the current settings
     // and make sure the read position wraps around in a circular manner using the modulo operator.
-    m_delayReadPosition = (m_delayWritePosition - static_cast<int>(m_delayLength) + m_delayBufferLength) % m_delayBufferLength;
+    m_delayReadPosition = static_cast<int>(m_delayWritePosition - (m_delayLength * m_sampleRate) + m_delayBufferLength) % m_delayBufferLength;
 
-    // Initialize for two channels (stereo). Increase this if you want more channels.
-    m_delayBuffer.resize(2, std::vector<float>(m_delayBufferLength, 0.0f));
+    // Initialize delay buffer for each channel
+    int32 numChannels = this->getBusCount(Vst::kAudio, Vst::kInput);
+    m_delayBuffer.resize(numChannels);
+    
+    // Resize each channel's buffer
+    for (int32 channel = 0; channel < numChannels; ++channel)
+    {
+        m_delayBuffer[channel].resize(m_delayBufferLength, 0.0f);
+    }
 }
 
 float delay2Processor::convertGainFromNormalized(Steinberg::Vst::ParamValue mGain)
@@ -304,21 +324,11 @@ float delay2Processor::convertGainFromNormalized(Steinberg::Vst::ParamValue mGai
 
 float delay2Processor::convertDelayLengthFromNormalized(Steinberg::Vst::ParamValue mDelayLength)
 {
-    float minDelayMS = 0.0f;
-    float maxDelayMS = 1000.0f;  // ensure this corresponds to the maximum delay time in seconds you want
-    float delayMS = mDelayLength * (maxDelayMS - minDelayMS) + minDelayMS;
-    
-    float delayInSamples = delayMS * m_sampleRate / 1000.0f;
-
-    // Manually compute the minimum
-    if (delayInSamples > static_cast<float>(m_delayBufferLength))
-    {
-        delayInSamples = static_cast<float>(m_delayBufferLength);
-    }
-
-    return delayInSamples;
+    float minDelaySec = 0.0f;
+    float maxDelaySec = 1.0f;
+    float delaySec = mDelayLength * (maxDelaySec - minDelaySec) + minDelaySec;
+    return delaySec;
 }
-
 
 float delay2Processor::convertDryMixFromNormalized(Steinberg::Vst::ParamValue mDryMix)
 {
