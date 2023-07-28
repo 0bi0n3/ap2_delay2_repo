@@ -4,6 +4,7 @@
 
 #include "controller.h"
 #include "cids.h"
+#include "base/source/fstreamer.h"
 
 
 using namespace Steinberg;
@@ -24,7 +25,14 @@ tresult PLUGIN_API delay2Controller::initialize (FUnknown* context)
 		return result;
 	}
 
-	// Here you could register some parameters
+    //---Create Parameters------------
+   parameters.addParameter (STR16 ("Gain"),
+                            STR16 ("dB"),
+                            0,
+                            0.5,
+                            Vst::ParameterInfo::kCanAutomate,
+                            AudioParams::kParamGainId,
+                            0);
 
 	return result;
 }
@@ -41,11 +49,20 @@ tresult PLUGIN_API delay2Controller::terminate ()
 //------------------------------------------------------------------------
 tresult PLUGIN_API delay2Controller::setComponentState (IBStream* state)
 {
-	// Here you get the state of the component (Processor part)
-	if (!state)
-		return kResultFalse;
+    // Here you get the state of the component (Processor part)
+    if (!state)
+        return kResultFalse;
 
-	return kResultOk;
+    IBStreamer streamer (state, kLittleEndian);
+    float savedParam1 = 0.f;
+    if (streamer.readFloat (savedParam1) == false)
+        return kResultFalse;
+
+    // sync with our parameter
+    if (auto param = parameters.getParameter (AudioParams::kParamGainId))
+        param->setNormalized (savedParam1);
+
+    return kResultOk;
 }
 
 //------------------------------------------------------------------------
