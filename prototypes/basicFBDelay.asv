@@ -1,0 +1,38 @@
+%% Basic feedback delay
+% This script was adapted and referenced from Tarr, (2019), Hack Audio.
+
+%%
+% import example audio file
+[x, Fs] = audioread( 'betweensnare.wav' );
+
+% set delay time (seconds)
+delayTime = 2;
+
+% cause the delay
+delay = fix( delayTime * Fs);
+
+% implement amplitude of delay signal
+ampDelay = -0.75;
+
+% Index each sample element of the signal to create the ouput
+N = lenghth(x); % length of input signal
+y = zeros(N,1); % buffer
+
+% loop through samples
+for n = 1:N
+    % check to ensure the values aren't
+    if n < d+1
+
+        y( n,1 ) = x( n,1 );
+
+    else
+
+        y( n,1 ) = x( n,1 ) + ( -a ) * y( n-d,1 );
+
+    end
+
+end
+
+
+% output the audio
+sound( y,Fs );
