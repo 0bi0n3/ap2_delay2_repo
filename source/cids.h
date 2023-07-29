@@ -9,11 +9,26 @@
 
 enum AudioParams : Steinberg::Vst::ParamID
 {
-    kParamGainId = 102, // should be a unique id
-    kParamDelayLengthId = 103,
-    kParamDryMixId = 104,
-    kParamWetMixId = 105,
-    kParamFeedbackId = 106,
+    kParamGainId_Master = 102, // should be a unique id
+    kParamDryMixId = 103,
+    kParamWetMixId = 104,
+    
+    kParamDelayLengthId_Tap1 = 105,
+    kParamDelayGainId_Tap1 = 106,
+    kParamFeedbackId_Tap1 = 107,
+    
+    kParamDelayLengthId_Tap2 = 108,
+    kParamDelayGainId_Tap2 = 109,
+    kParamFeedbackId_Tap2 = 110,
+    
+    kParamDelayLengthId_Tap3 = 111,
+    kParamDelayGainId_Tap3 = 112,
+    kParamFeedbackId_Tap3 = 113,
+    
+    kParamDelayLengthId_Tap4 = 114,
+    kParamDelayGainId_Tap4 = 115,
+    kParamFeedbackId_Tap4 = 116,
+    
 };
 
 namespace delayEffectProcessor {

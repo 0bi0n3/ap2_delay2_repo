@@ -19,22 +19,11 @@ namespace delayEffectProcessor {
 //------------------------------------------------------------------------
 delay2Processor::delay2Processor ()
 {
-	//--- set the wanted controller for our processor
-	setControllerClass (kdelay2ControllerUID);
+    //--- set the wanted controller for our processor
+    setControllerClass (kdelay2ControllerUID);
     
-    m_gain = 1.0f;
-//
-    m_delayLength = 0.5f;
-    m_dryMix = 1.0f;
-    m_wetMix = 0.5f;
-    m_feedback = 0.75f;
-    
-    m_delayReadPosition = 0;
-    m_delayWritePosition = 0;
-    
-    // initialize delay buffer
-    m_delayBufferLength = 0;
-    m_delayBuffer = std::vector<std::vector<float>>();
+    // Set an initial value for the allpass filter coefficient
+    m_AllpassCoefficient = 0.5;
 }
 
 //------------------------------------------------------------------------
@@ -45,40 +34,69 @@ delay2Processor::~delay2Processor ()
 //------------------------------------------------------------------------
 tresult PLUGIN_API delay2Processor::initialize (FUnknown* context)
 {
-	// Here the Plug-in will be instantiated
-	
-	//---always initialize the parent-------
-	tresult result = AudioEffect::initialize (context);
-	// if everything Ok, continue
-	if (result != kResultOk)
-	{
-		return result;
-	}
-
-	//--- create Audio IO ------
-	addAudioInput (STR16 ("Stereo In"), Steinberg::Vst::SpeakerArr::kStereo);
-	addAudioOutput (STR16 ("Stereo Out"), Steinberg::Vst::SpeakerArr::kStereo);
-
-	/* If you don't need an event bus, you can remove the next line */
-	addEventInput (STR16 ("Event In"), 1);
-
-	return kResultOk;
+    // Here the Plug-in will be instantiated
+    
+    //---always initialize the parent-------
+    tresult result = AudioEffect::initialize (context);
+    // if everything Ok, continue
+    if (result != kResultOk)
+    {
+        return result;
+    }
+    
+    //--- create Audio IO ------
+    addAudioInput (STR16 ("Stereo In"), Steinberg::Vst::SpeakerArr::kStereo);
+    addAudioOutput (STR16 ("Stereo Out"), Steinberg::Vst::SpeakerArr::kStereo);
+    
+    /* If you don't need an event bus, you can remove the next line */
+    addEventInput (STR16 ("Event In"), 1);
+    
+    return kResultOk;
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API delay2Processor::terminate ()
 {
-	// Here the Plug-in will be de-instantiated, last possibility to remove some memory!
-	
-	//---do not forget to call parent ------
-	return AudioEffect::terminate ();
+    // Here the Plug-in will be de-instantiated, last possibility to remove some memory!
+    
+    //---do not forget to call parent ------
+    return AudioEffect::terminate ();
 }
 
 //------------------------------------------------------------------------
 tresult PLUGIN_API delay2Processor::setActive (TBool state)
 {
-	//--- called when the Plug-in is enable/disable (On/Off) -----
-	return AudioEffect::setActive (state);
+    //--- called when the Plug-in is enable/disable (On/Off) -----
+    Steinberg::Vst::SpeakerArrangement arr;
+    if (getBusArrangement(Steinberg::Vst::kOutput, 0, arr) != kResultTrue)
+        return kResultFalse;
+    
+    int numChannels = Steinberg::Vst::SpeakerArr::getChannelCount(arr);
+    double sampleRate = processSetup.sampleRate;
+    m_circularBufferSampleRate = sampleRate;
+    
+    // Function to initialize the CircularBuffer for each channel
+    auto initializeCircularBuffer = [sampleRate]()
+    {
+        return CircularBuffer(sampleRate * 2); // maximum delay time for each tap
+    };
+    
+    if (state)
+    {
+        // Create a new CircularBuffer for each channel and store it in m_dBuffer
+        m_dBuffer.clear();
+        for (int i = 0; i < numChannels; i++)
+        {
+            m_dBuffer.push_back(initializeCircularBuffer());
+        }
+    }
+    else
+    {
+        // Clear m_dBuffer when the plugin is disabled (Off)
+        m_dBuffer.clear();
+    }
+    
+    return AudioEffect::setActive(state);
 }
 
 //------------------------------------------------------------------------
@@ -104,125 +122,261 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
                 int32 numPoints = paramQueue->getPointCount ();
 
                 // Check which parameter has changed
-                switch (paramQueue->getParameterId ())
+                switch (paramQueue->getParameterId())
                 {
-                    // In this case, we're only handling changes to gain
-                    case AudioParams::kParamGainId:
+                    // Master Gain parameter
+                    case AudioParams::kParamGainId_Master:
                         // Get the most recent value of the parameter
-                        if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
                             // Update our internal gain value with the new value
-                            m_gain = convertGainFromNormalized(value);
+                            m_gainMaster = value;
+                        }
                         break;
-                        
-                    case AudioParams::kParamDelayLengthId:
+
+                    // Delay Time for Tap 1
+                    case AudioParams::kParamDelayLengthId_Tap1:
                         // Get the most recent value of the parameter
-                        if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
-                            // Update internal delay length value with the new value
-                            setDelayLength(convertDelayLengthFromNormalized(value));
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update internal delay length value for Tap 1 with the new value
+                            m_Delay1 = value;
+                        }
                         break;
-                        
+
+                    // Delay Gain for Tap 1
+                    case kParamDelayGainId_Tap1:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update the delay gain value for Tap 1 with the new value
+                            m_dGain1 = value;
+                        }
+                        break;
+
+                    // Feedback Gain for Tap 1
+                    case kParamFeedbackId_Tap1:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update the feedback gain value for Tap 1 with the new value
+                            m_dFeedback1 = value;
+                        }
+                        break;
+
+                    // Delay Time for Tap 2
+                    case kParamDelayLengthId_Tap2:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update internal delay length value for Tap 2 with the new value
+                            m_Delay2 = value;
+                        }
+                        break;
+
+                    // Delay Gain for Tap 2
+                    case kParamDelayGainId_Tap2:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update the delay gain value for Tap 2 with the new value
+                            m_dGain2 = value;
+                        }
+                        break;
+
+                    // Feedback Gain for Tap 2
+                    case kParamFeedbackId_Tap2:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update the feedback gain value for Tap 2 with the new value
+                            m_dFeedback2 = value;
+                        }
+                        break;
+
+                    // Delay Time for Tap 3
+                    case kParamDelayLengthId_Tap3:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update internal delay length value for Tap 3 with the new value
+                            m_Delay3 = value;
+                        }
+                        break;
+
+                    // Delay Gain for Tap 3
+                    case kParamDelayGainId_Tap3:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update the delay gain value for Tap 3 with the new value
+                            m_dGain3 = value;
+                        }
+                        break;
+
+                    // Feedback Gain for Tap 3
+                    case kParamFeedbackId_Tap3:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update the feedback gain value for Tap 3 with the new value
+                            m_dFeedback3 = value;
+                        }
+                        break;
+
+                    // Delay Time for Tap 4
+                    case kParamDelayLengthId_Tap4:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update internal delay length value for Tap 4 with the new value
+                            m_Delay4 = value;
+                        }
+                        break;
+
+                    // Delay Gain for Tap 4
+                    case kParamDelayGainId_Tap4:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update the delay gain value for Tap 4 with the new value
+                            m_dGain4 = value;
+                        }
+                        break;
+
+                    // Feedback Gain for Tap 4
+                    case kParamFeedbackId_Tap4:
+                        // Get the most recent value of the parameter
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update the feedback gain value for Tap 4 with the new value
+                            m_dFeedback4 = value;
+                        }
+                        break;
+
+                    // Dry Mix parameter
                     case AudioParams::kParamDryMixId:
                         // Get the most recent value of the parameter
-                        if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
-                            // Update our internal gain value with the new value
-                            m_dryMix = convertDryMixFromNormalized(value);
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update our internal dry mix value with the new value
+                            m_DryMix = value;
+                        }
                         break;
-                        
+
+                    // Wet Mix parameter
                     case AudioParams::kParamWetMixId:
                         // Get the most recent value of the parameter
-                        if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
-                            // Update our internal gain value with the new value
-                            m_wetMix = convertWetMixFromNormalized(value);
-                        break;
-                        
-                    case AudioParams::kParamFeedbackId:
-                        // Get the most recent value of the parameter
-                        if (paramQueue->getPoint (numPoints - 1, sampleOffset, value) == kResultTrue)
-                            // Update our internal gain value with the new value
-                            m_feedback = convertFeedbackFromNormalized(value);
+                        if (paramQueue->getPoint(numPoints - 1, sampleOffset, value) == kResultTrue)
+                        {
+                            // Update our internal wet mix value with the new value
+                            m_WetMix = value;
+                        }
                         break;
                 }
+
             }
         }
     }
     
-    // If there's no data to process, return
     if (data.numInputs == 0 || data.numSamples == 0)
         return kResultOk;
 
-    // Get the number of channels and samples
     int32 numChannels = data.inputs[0].numChannels;
-    int32 numSamples = data.numSamples;
-    
-    // Initialize delay buffer pointers
-    int32 dpr = m_delayReadPosition;
-    int32 dpw = m_delayWritePosition;
-    
-    // Get input and output buffer pointers
-    void** in = getChannelBuffersPointer (processSetup, data.inputs[0]);
-    void** out = getChannelBuffersPointer (processSetup, data.outputs[0]);
+    uint32 sampleFramesSize = getSampleFramesSizeInBytes(processSetup, data.numSamples);
+    void** in = getChannelBuffersPointer(processSetup, data.inputs[0]);
+    void** out = getChannelBuffersPointer(processSetup, data.outputs[0]);
 
-    // Initially set the output silence flag to 0, assuming there will be sound
     data.outputs[0].silenceFlags = 0;
 
-    // Iterate over each channel
-    for (int32 channel = 0; channel < numChannels; ++channel)
+    // Declare dry part of mix value
+    double dryMix = (1.0 - m_WetMix);
+
+    // Declare wet part of mix value
+    double wetMix = m_WetMix;
+
+    // Declare gain limiter
+    double gainLimitter = 1.0 - wetMix * 0.5;
+
+    // Do process for each channel
+    for (int32 i = 0; i < numChannels; i++)
     {
-        // Get input data for this channel
-        Vst::Sample32* channelData = static_cast<Vst::Sample32*>(in[channel]);
-        
-        // Get output data for this channel
-        Vst::Sample32* outputData = static_cast<Vst::Sample32*>(out[channel]);
 
-        // Get delay buffer data for this channel
-        float* delayData = m_delayBuffer[std::min(channel, (int)m_delayBuffer.size() - 1)].data();
-        
-        // Process each sample
-                for (int32 i = 0; i < numSamples; ++i)
-                {
-                    // Get the current input sample
-                    const float in = channelData[i];
-                    float out = 0.0;
+        // Take samples from input audio
+        int32 samples = data.numSamples;
+        Vst::Sample32* ptrIn = (Vst::Sample32*)in[i];
+        Vst::Sample32* ptrOut = (Vst::Sample32*)out[i];
+        Vst::Sample32 outputAudio;
 
-                    // Compute the fraction and the base index
-                    float fraction = m_delayReadPosition - (int)m_delayReadPosition;
-                    int index = (int)m_delayReadPosition;
+        while (--samples >= 0) {
 
-                    // Create an output sample based on input, interpolated delay buffer content, and dry/wet mix
-                    float interpolatedDelay = interpolate(fraction, delayData[index], delayData[(index + 1) % m_delayBufferLength]);
-                    out = (m_dryMix * in + m_wetMix * interpolatedDelay);
+            // Pointer to inputAudio
+            double inputAudio = (*ptrIn++);
 
-                    // Write the current input and feedback-scaled delay buffer content to the delay buffer
-                    float newSample = in + (delayData[dpr] * m_feedback);
-                    // Clip the new sample to prevent overflow
-                    newSample = std::max(std::min(newSample, 0.8f), -0.8f);
-                    delayData[dpw] = newSample;
-                    
-                    // Increment and wrap the delay buffer pointers
-                    if (++dpr >= m_delayBufferLength)
-                        dpr = 0;
-                    if (++dpw >= m_delayBufferLength)
-                        dpw = 0;
-                    
-                    // Write the output sample to the output data
-                    out = std::max(std::min(out, 1.0f), -1.0f);
-                    outputData[i] = out * m_gain;
+            // ringdelay is the minimum delay for one sample
+            const double bufferDelay = 1.0 / m_circularBufferSampleRate;
 
-                }
+            // Declare delay times to process for each tap
+            double delayedTime1 = std::max(static_cast<double>(m_Delay1), bufferDelay);
+            double delayedTime2 = std::max(static_cast<double>(m_Delay2 * m_Delay1), bufferDelay);
+            double delayedTime3 = std::max(static_cast<double>(m_Delay3 * m_Delay1), bufferDelay);
+            double delayedTime4 = std::max(static_cast<double>(m_Delay4 * m_Delay1), bufferDelay);
+
+            // Delayed sample for each tap
+            double delayedSig1 = m_dBuffer[i].performInterpolation(m_circularBufferSampleRate * delayedTime1);
+            double delayedSig2 = m_dBuffer[i].performInterpolation(m_circularBufferSampleRate * delayedTime2);
+            double delayedSig3 = m_dBuffer[i].performInterpolation(m_circularBufferSampleRate * delayedTime3);
+            double delayedSig4 = m_dBuffer[i].performInterpolation(m_circularBufferSampleRate * delayedTime4);
+
+            // Multiple feedback gain with delayed samples
+            double feedbackSig1 = m_dFeedback1 * delayedSig1;
+            double feedbackSig2 = m_dFeedback2 * delayedSig2;
+            double feedbackSig3 = m_dFeedback3 * delayedSig3;
+            double feedbackSig4 = m_dFeedback4 * delayedSig4;
+
+            // Sum all feeded taps
+            double totalFeeded = feedbackSig1 + feedbackSig2 + feedbackSig3 + feedbackSig4;
+
+            // Apply the feedback gain check for each tap
+            const double maxFeedbackGain = 0.8; // Set the maximum allowed feedback gain for each tap
+            double feedbackGain1 = std::min(m_dFeedback1, maxFeedbackGain);
+            double feedbackGain2 = std::min(m_dFeedback2, maxFeedbackGain);
+            double feedbackGain3 = std::min(m_dFeedback3, maxFeedbackGain);
+            double feedbackGain4 = std::min(m_dFeedback4, maxFeedbackGain);
+
+            // Calculate the total feedback with the limited feedback gain for each tap
+            double mixedFeedbackSignal = feedbackGain1 * delayedSig1 + feedbackGain2 * delayedSig2
+                               + feedbackGain3 * delayedSig3 + feedbackGain4 * delayedSig4;
+
+            // Apply gain limiter to totalFeeded
+            double mixedFeedbackLimited = gainLimitter * mixedFeedbackSignal;
+            
+            // Write it back to delay buffer with inputAudio
+            m_dBuffer[i].performWrite(inputAudio + mixedFeedbackLimited);
+
+            // Multiple feedback gain with delayed samples each tap
+            double fbGain1 = m_dGain1 * delayedSig1;
+            double fbGain2 = m_dGain2 * delayedSig2;
+            double fbGain3 = m_dGain3 * delayedSig3;
+            double fbGain4 = m_dGain4 * delayedSig4;
+
+            // Sum all gained taps
+            double totalSignal = fbGain1 + fbGain2 + fbGain3 + fbGain4;
+
+            // Add dry and wet portions to inputAudio and totalGained
+            double mixedAudio = (dryMix * inputAudio) + (wetMix * totalSignal);
+
+            // Apply gain limiter to mixed Audio
+            outputAudio = gainLimitter * mixedAudio;
+
+            // Apply the allpass filter to the output signal
+            double allpassOutput = processAllpass(outputAudio);
+
+            // Send the allpass-filtered output to the output pointer
+            (*ptrOut++) = allpassOutput * m_gainMaster;
+        }
     }
-        
-    // Update delay buffer pointers for the next block
-    m_delayReadPosition = dpr;
-    m_delayWritePosition = dpw;
 
-    // If there are more output channels than input channels, clear the remaining channels
-    for (int32 i = numChannels; i < data.numOutputs; ++i)
-    {
-        // Clear channel data by setting it to zero
-        memset (out[i], 0, numSamples * sizeof(Vst::Sample32));
-    }
-    
-    // Everything processed successfully
     return kResultOk;
 }
 
@@ -230,14 +384,6 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
 //------------------------------------------------------------------------
 tresult PLUGIN_API delay2Processor::setupProcessing (Vst::ProcessSetup& newSetup)
 {
-    // Check for sample rate changes
-    if (m_sampleRate != newSetup.sampleRate)
-    {
-        m_sampleRate = newSetup.sampleRate;
-        resizeDelayBuffer();
-        setDelayLength(m_delayLength);
-    }
-    
     // Let the parent class also handle this call
     return AudioEffect::setupProcessing(newSetup);
 }
@@ -259,15 +405,9 @@ tresult PLUGIN_API delay2Processor::canProcessSampleSize (int32 symbolicSampleSi
 //------------------------------------------------------------------------
 tresult PLUGIN_API delay2Processor::setState (IBStream* state)
 {
-    if (!state)
-        return kResultFalse;
 
     // called when we load a preset or project, the model has to be reloaded
     IBStreamer streamer (state, kLittleEndian);
-    float savedParam1 = 0.f;
-    if (streamer.readFloat (savedParam1) == false)
-        return kResultFalse;
-    m_gain = savedParam1;
 
     return kResultOk;
 }
@@ -276,81 +416,36 @@ tresult PLUGIN_API delay2Processor::setState (IBStream* state)
 tresult PLUGIN_API delay2Processor::getState (IBStream* state)
 {
     // here we need to save the model (preset or project)
-    float toSaveParam1 = m_gain;
     IBStreamer streamer (state, kLittleEndian);
-    streamer.writeFloat (toSaveParam1);
     return kResultOk;
 }
 
-//------------------------------------------------------------------------
-//----------------------arthor implemented functions-----------------------
-//------------------------------------------------------------------------
-
-void delay2Processor::setDelayLength(float newDelayLength)
+// Function to calculate the coefficient for the allpass filter
+void delay2Processor::calculateAllpassCoefficient(double delayTimeSeconds)
 {
-    m_delayLength = newDelayLength;
+    // Calculate the coefficient 'g' for the allpass filter using the desired delay time in seconds.
+    // The formula is: g = (1 - delayTimeSeconds) / (1 + delayTimeSeconds)
+    double g = (1.0 - delayTimeSeconds) / (1.0 + delayTimeSeconds);
 
-    // Calculate the position to read from the delay buffer based on the new delay length
-    m_delayReadPosition = static_cast<int>(m_delayWritePosition - (m_delayLength * m_sampleRate) + m_delayBufferLength) % m_delayBufferLength;
+    // Store the calculated coefficient in the member variable 'm_AllpassCoefficient' for later use.
+    m_AllpassCoefficient = g;
 }
 
-void delay2Processor::resizeDelayBuffer()
+// Function to process the input signal through the allpass filter and return the filtered output
+double delay2Processor::processAllpass(double input)
 {
-    // Assuming you want a maximum delay of 1 second
-    m_delayBufferLength = static_cast<int>(m_sampleRate * 1.0);
-    
-    // Calculate the position to read from the delay buffer based on the current settings
-    // and make sure the read position wraps around in a circular manner using the modulo operator.
-    m_delayReadPosition = static_cast<int>(m_delayWritePosition - (m_delayLength * m_sampleRate) + m_delayBufferLength) % m_delayBufferLength;
+    // Multiply the input by the negative of 'm_AllpassCoefficient' and add the previous input value.
+    double output = input * (-m_AllpassCoefficient) + m_PreviousInput;
 
-    // Initialize delay buffer for each channel
-    int32 numChannels = this->getBusCount(Vst::kAudio, Vst::kInput);
-    m_delayBuffer.resize(numChannels);
-    
-    // Resize each channel's buffer
-    for (int32 channel = 0; channel < numChannels; ++channel)
-    {
-        m_delayBuffer[channel].resize(m_delayBufferLength, 0.0f);
-    }
-}
+    // Add the previous output value multiplied by 'm_AllpassCoefficient'.
+    output += m_AllpassCoefficient * m_PreviousOutput;
 
-float delay2Processor::convertGainFromNormalized(Steinberg::Vst::ParamValue mGain)
-{
-    float minGainDB = -60.0f;
-    float maxGainDB = 0.0f;
-    float gainDB = mGain * (maxGainDB - minGainDB) + minGainDB;
-    return powf(10.0f, gainDB / 20.0f);
-}
+    // Update the previous input and output values for the next sample processing.
+    m_PreviousInput = input;
+    m_PreviousOutput = output;
 
-float delay2Processor::convertDelayLengthFromNormalized(Steinberg::Vst::ParamValue mDelayLength)
-{
-    float minDelaySec = 0.0f;
-    float maxDelaySec = 1.0f;
-    float delaySec = mDelayLength * (maxDelaySec - minDelaySec) + minDelaySec;
-    return delaySec;
-}
-
-float delay2Processor::convertDryMixFromNormalized(Steinberg::Vst::ParamValue mDryMix)
-{
-    return mDryMix;
-}
-
-float delay2Processor::convertWetMixFromNormalized(Steinberg::Vst::ParamValue mWetMix)
-{
-    return mWetMix;
-}
-
-float delay2Processor::convertFeedbackFromNormalized(Steinberg::Vst::ParamValue mFeedback)
-{
-    float minFeedbackGainDB = -60.0f;
-    float maxFeedbackGainDB = 0.0f;
-    float feedbackGainDB = mFeedback * (maxFeedbackGainDB - minFeedbackGainDB) + minFeedbackGainDB;
-    return powf(10.0f, feedbackGainDB / 20.0f);
-}
-
-float delay2Processor::interpolate(float fraction, float prevSample, float nextSample)
-{
-    return fraction * nextSample + (1.0f - fraction) * prevSample;
+    // Return the filtered output from the allpass filter.
+    return output;
 }
 
 //------------------------------------------------------------------------

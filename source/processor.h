@@ -7,6 +7,7 @@
 #pragma once
 
 #include "public.sdk/source/vst/vstaudioeffect.h"
+#include "circularBuffer.hpp"
 
 namespace delayEffectProcessor {
 
@@ -55,29 +56,42 @@ public:
 //------------------------------------------------------------------------
 protected:
     // These values are used for the processing.
-    int m_gain;
-    float m_delayLength;
-    float m_dryMix;
-    float m_wetMix;
-    float m_feedback;
+    int m_circularBufferSampleRate;
+    std::vector<CircularBuffer> m_dBuffer;
+    
+    Steinberg::Vst::ParamValue m_gainMaster = 0.f;
+    
+    Steinberg::Vst::ParamValue m_DryMix = 0.f;
+    Steinberg::Vst::ParamValue m_WetMix = 0.f;
+    
+    Steinberg::Vst::ParamValue m_Delay1 = 0.f;
+    Steinberg::Vst::ParamValue m_dGain1 = 0.f;
+    Steinberg::Vst::ParamValue m_dFeedback1 = 0.f;
+    
+    Steinberg::Vst::ParamValue m_Delay2 = 0.f;
+    Steinberg::Vst::ParamValue m_dGain2 = 0.f;
+    Steinberg::Vst::ParamValue m_dFeedback2 = 0.f;
+    
+    Steinberg::Vst::ParamValue m_Delay3 = 0.f;
+    Steinberg::Vst::ParamValue m_dGain3 = 0.f;
+    Steinberg::Vst::ParamValue m_dFeedback3 = 0.f;
+    
+    Steinberg::Vst::ParamValue m_Delay4 = 0.f;
+    Steinberg::Vst::ParamValue m_dGain4 = 0.f;
+    Steinberg::Vst::ParamValue m_dFeedback4 = 0.f;
+    
     
 private:
-    std::vector<std::vector<float>> m_delayBuffer;
-    int m_delayBufferLength;
-    int m_delayReadPosition;
-    int m_delayWritePosition;
-    double m_sampleRate;
-    
-    void setDelayLength(float newDelayLength);
-    void resizeDelayBuffer();
-    
-    float convertGainFromNormalized(Steinberg::Vst::ParamValue mGain);
-    float convertDelayLengthFromNormalized(Steinberg::Vst::ParamValue mDelayLength);
-    float convertDryMixFromNormalized(Steinberg::Vst::ParamValue mDryMix);
-    float convertWetMixFromNormalized(Steinberg::Vst::ParamValue mWetMix);
-    float convertFeedbackFromNormalized(Steinberg::Vst::ParamValue mFeedback);
-    float interpolate(float fraction, float prevSample, float nextSample);
+    // Allpass filter coefficients
+    double m_AllpassCoefficient;
+    double m_PreviousInput;
+    double m_PreviousOutput;
 
+    // Function to calculate allpass filter coefficients
+    void calculateAllpassCoefficient(double delayTimeSeconds);
+
+    // Allpass filter processing function
+    double processAllpass(double input);
 };
 
 //------------------------------------------------------------------------

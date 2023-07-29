@@ -26,46 +26,125 @@ tresult PLUGIN_API delay2Controller::initialize (FUnknown* context)
 	}
 
     //---Create Parameters------------
-   parameters.addParameter (STR16 ("Master Gain"),
-                            STR16 ("dB"),
+    parameters.addParameter(STR16("Master Gain"),
+                            STR16("dB"),
                             0,
                             0.5,
                             Vst::ParameterInfo::kCanAutomate,
-                            AudioParams::kParamGainId,
+                            AudioParams::kParamGainId_Master,
                             0);
-    
-    parameters.addParameter(STR16 ("Delay Time"),
-                            STR16 ("sec"),
+
+    parameters.addParameter(STR16("Delay Time Tap 1"),
+                            STR16("sec"),
                             0,
-                            0.1,
+                            0.5,
                             Vst::ParameterInfo::kCanAutomate,
-                            AudioParams::kParamDelayLengthId,
+                            AudioParams::kParamDelayLengthId_Tap1,
                             0);
-    
-    parameters.addParameter(STR16 ("Dry Mix"),
-                            STR16 ("%"),
+
+    parameters.addParameter(STR16("Delay Gain Tap 1"),
+                            STR16("dB"),
+                            0,
+                            0.5,
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamDelayGainId_Tap1,
+                            0);
+
+    parameters.addParameter(STR16("Feedback Gain Tap 1"),
+                            STR16("dB"),
+                            0,
+                            0.0,
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamFeedbackId_Tap1,
+                            0);
+
+    parameters.addParameter(STR16("Delay Time Tap 2"),
+                            STR16("sec"),
+                            0,
+                            0.0,
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamDelayLengthId_Tap2,
+                            0);
+
+    parameters.addParameter(STR16("Delay Gain Tap 2"),
+                            STR16("dB"),
+                            0,
+                            0.0,
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamDelayGainId_Tap2,
+                            0);
+
+    parameters.addParameter(STR16("Feedback Gain Tap 2"),
+                            STR16("dB"),
+                            0,
+                            0.0,
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamFeedbackId_Tap2,
+                            0);
+
+    parameters.addParameter(STR16("Delay Time Tap 3"),
+                            STR16("sec"),
+                            0,
+                            0.0,
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamDelayLengthId_Tap3,
+                            0);
+
+    parameters.addParameter(STR16("Delay Gain Tap 3"),
+                            STR16("dB"),
+                            0,
+                            0.0,
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamDelayGainId_Tap3,
+                            0);
+
+    parameters.addParameter(STR16("Feedback Gain Tap 3"),
+                            STR16("dB"),
+                            0,
+                            0.0,
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamFeedbackId_Tap3,
+                            0);
+
+    parameters.addParameter(STR16("Delay Time Tap 4"),
+                            STR16("sec"),
+                            0,
+                            0.0,
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamDelayLengthId_Tap4,
+                            0);
+
+    parameters.addParameter(STR16("Delay Gain Tap 4"),
+                            STR16("dB"),
+                            0,
+                            0.0,
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamDelayGainId_Tap4,
+                            0);
+
+    parameters.addParameter(STR16("Feedback Gain Tap 4"),
+                            STR16("dB"),
+                            0,
+                            0.0,
+                            Vst::ParameterInfo::kCanAutomate,
+                            kParamFeedbackId_Tap4,
+                            0);
+
+    parameters.addParameter(STR16("Dry Mix"),
+                            STR16("%"),
                             0,
                             0.5,
                             Vst::ParameterInfo::kCanAutomate,
                             AudioParams::kParamDryMixId,
                             0);
-    
-    parameters.addParameter(STR16 ("Wet Mix"),
-                            STR16 ("%"),
+
+    parameters.addParameter(STR16("Wet Mix"),
+                            STR16("%"),
                             0,
                             0.5,
                             Vst::ParameterInfo::kCanAutomate,
                             AudioParams::kParamWetMixId,
                             0);
-    
-    parameters.addParameter(STR16 ("Feedback Gain"),
-                            STR16 ("dB"),
-                            0,
-                            0.0,
-                            Vst::ParameterInfo::kCanAutomate,
-                            AudioParams::kParamFeedbackId,
-                            0);
-    
 	return result;
 }
 
