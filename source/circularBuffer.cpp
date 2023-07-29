@@ -3,6 +3,8 @@
 //  delay2
 //
 //  Created by Oberon Day-West on 28/07/2023.
+//  This script was adapted and referenced from Reiss and McPherson (2015), Tarr (2019) and Roma (2023).
+//  Please refer to accompanying report reference list for full reference details.
 //
 
 #include "circularBuffer.hpp"
