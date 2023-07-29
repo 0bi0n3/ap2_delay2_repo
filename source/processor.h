@@ -92,6 +92,7 @@ private:
 
     // Allpass filter processing function
     double processAllpass(double input);
+
 };
 
 //------------------------------------------------------------------------

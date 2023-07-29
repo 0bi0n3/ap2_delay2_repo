@@ -1,6 +1,6 @@
 //------------------------------------------------------------------------
 // Copyright(c) 2023 Oberon Day-West.
-// This script was adapted and referenced from Reiss and McPherson (2015) and Tarr (2019).
+// This script was adapted and referenced from Reiss and McPherson (2015) Tarr (2019) and Roma (2023).
 // Please refer to accompanying report reference list for full reference details.
 //------------------------------------------------------------------------
 
@@ -279,26 +279,27 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
         }
     }
     
+    // If there's no input or samples, there's nothing to process
     if (data.numInputs == 0 || data.numSamples == 0)
         return kResultOk;
 
+    // Get basic information about the sound data
     int32 numChannels = data.inputs[0].numChannels;
     uint32 sampleFramesSize = getSampleFramesSizeInBytes(processSetup, data.numSamples);
+    
+    // These are pointers to the actual audio data for processing
     void** in = getChannelBuffersPointer(processSetup, data.inputs[0]);
     void** out = getChannelBuffersPointer(processSetup, data.outputs[0]);
 
+    // Make sure output isn't marked as silent
     data.outputs[0].silenceFlags = 0;
 
-    // Declare dry part of mix value
+    // Determine the mix of original (dry) and effect (wet) sounds
     double dryMix = (1.0 - m_WetMix);
-
-    // Declare wet part of mix value
     double wetMix = m_WetMix;
-
-    // Declare gain limiter
     double gainLimitter = 1.0 - wetMix * 0.5;
 
-    // Do process for each channel
+    // Process each channel of audio separately
     for (int32 i = 0; i < numChannels; i++)
     {
 
@@ -310,69 +311,66 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
 
         while (--samples >= 0) {
 
-            // Pointer to inputAudio
+            // Read from the input and write to the output
             double inputAudio = (*ptrIn++);
 
-            // ringdelay is the minimum delay for one sample
+            // Determine the minimum delay based on the buffer sample rate
             const double bufferDelay = 1.0 / m_circularBufferSampleRate;
 
-            // Declare delay times to process for each tap
+            // Calculate delay times for each of the taps
             double delayedTime1 = std::max(static_cast<double>(m_Delay1), bufferDelay);
             double delayedTime2 = std::max(static_cast<double>(m_Delay2 * m_Delay1), bufferDelay);
             double delayedTime3 = std::max(static_cast<double>(m_Delay3 * m_Delay1), bufferDelay);
             double delayedTime4 = std::max(static_cast<double>(m_Delay4 * m_Delay1), bufferDelay);
 
-            // Delayed sample for each tap
+            // Get a delayed signal for each tap
             double delayedSig1 = m_dBuffer[i].performInterpolation(m_circularBufferSampleRate * delayedTime1);
             double delayedSig2 = m_dBuffer[i].performInterpolation(m_circularBufferSampleRate * delayedTime2);
             double delayedSig3 = m_dBuffer[i].performInterpolation(m_circularBufferSampleRate * delayedTime3);
             double delayedSig4 = m_dBuffer[i].performInterpolation(m_circularBufferSampleRate * delayedTime4);
 
-            // Multiple feedback gain with delayed samples
+            // Each delayed signal is fed back into itself to create an echo
             double feedbackSig1 = m_dFeedback1 * delayedSig1;
             double feedbackSig2 = m_dFeedback2 * delayedSig2;
             double feedbackSig3 = m_dFeedback3 * delayedSig3;
             double feedbackSig4 = m_dFeedback4 * delayedSig4;
 
-            // Sum all feeded taps
-            double totalFeeded = feedbackSig1 + feedbackSig2 + feedbackSig3 + feedbackSig4;
-
-            // Apply the feedback gain check for each tap
-            const double maxFeedbackGain = 0.8; // Set the maximum allowed feedback gain for each tap
+            // We limit the total feedback gain to avoid overflows
+            const double maxFeedbackGain = 0.8;
             double feedbackGain1 = std::min(m_dFeedback1, maxFeedbackGain);
             double feedbackGain2 = std::min(m_dFeedback2, maxFeedbackGain);
             double feedbackGain3 = std::min(m_dFeedback3, maxFeedbackGain);
             double feedbackGain4 = std::min(m_dFeedback4, maxFeedbackGain);
 
-            // Calculate the total feedback with the limited feedback gain for each tap
+            // Total feedback is the sum of each feedback gain times its delayed signal
             double mixedFeedbackSignal = feedbackGain1 * delayedSig1 + feedbackGain2 * delayedSig2
                                + feedbackGain3 * delayedSig3 + feedbackGain4 * delayedSig4;
 
-            // Apply gain limiter to totalFeeded
+            // Gain limiter applied to the mixed feedback signal
             double mixedFeedbackLimited = gainLimitter * mixedFeedbackSignal;
             
-            // Write it back to delay buffer with inputAudio
+            // Mix the input audio with the feedback and write it back into the buffer
             m_dBuffer[i].performWrite(inputAudio + mixedFeedbackLimited);
 
-            // Multiple feedback gain with delayed samples each tap
+            // Calculate the feedback gain for each tap
             double fbGain1 = m_dGain1 * delayedSig1;
             double fbGain2 = m_dGain2 * delayedSig2;
             double fbGain3 = m_dGain3 * delayedSig3;
             double fbGain4 = m_dGain4 * delayedSig4;
 
-            // Sum all gained taps
+            // Sum of all feedback gains is the total signal
             double totalSignal = fbGain1 + fbGain2 + fbGain3 + fbGain4;
 
-            // Add dry and wet portions to inputAudio and totalGained
+            // Mix the dry (original) audio with the wet (effected) audio
             double mixedAudio = (dryMix * inputAudio) + (wetMix * totalSignal);
 
-            // Apply gain limiter to mixed Audio
+            // Gain limiter applied to the mixed audio
             outputAudio = gainLimitter * mixedAudio;
 
-            // Apply the allpass filter to the output signal
+            // Allpass filter applied to the output
             double allpassOutput = processAllpass(outputAudio);
 
-            // Send the allpass-filtered output to the output pointer
+            // The result is written to the output
             (*ptrOut++) = allpassOutput * m_gainMaster;
         }
     }
@@ -447,6 +445,7 @@ double delay2Processor::processAllpass(double input)
     // Return the filtered output from the allpass filter.
     return output;
 }
+
 
 //------------------------------------------------------------------------
 } // namespace delayEffectProcessor
