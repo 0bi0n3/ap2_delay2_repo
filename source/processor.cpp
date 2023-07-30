@@ -334,7 +334,8 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
             double feedbackSig2 = m_dFeedback2 * delayedSig2;
             double feedbackSig3 = m_dFeedback3 * delayedSig3;
             double feedbackSig4 = m_dFeedback4 * delayedSig4;
-
+            
+          
             // We limit the total feedback gain to avoid overflows
             const double maxFeedbackGain = 0.8;
             double feedbackGain1 = std::min(m_dFeedback1, maxFeedbackGain);
