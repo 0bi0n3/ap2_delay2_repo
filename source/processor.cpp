@@ -294,7 +294,7 @@ tresult PLUGIN_API delay2Processor::process (Vst::ProcessData& data)
     // Make sure output isn't marked as silent
     data.outputs[0].silenceFlags = 0;
 
-    // Determine the mix of original (dry) and effect (wet) sounds
+    // Determine the mix of original (dry) and effect (wet)
     double dryMix = (1.0 - m_WetMix);
     double wetMix = m_WetMix;
     double gainLimitter = 1.0 - wetMix * 0.5;

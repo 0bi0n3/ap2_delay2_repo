@@ -11,8 +11,11 @@ numSamplesWrite = 50;
 x = zeros(numSamplesWrite, 1);
 x(1:10) = 1; % Set the first sample to 1
 
+% buffer length
+bufferLength = numSamplesWrite;
+
 % initialise buffer
-buffer = zeros(numSamplesWrite, 1);
+buffer = zeros(bufferLength, 1);
 
 % initialise write pointer
 writePointer = 1;

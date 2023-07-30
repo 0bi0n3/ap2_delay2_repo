@@ -1,0 +1,85 @@
+%% Multitap delay
+%
+% This script was adapted and referenced from Zolzer (2011) and Tarr (2019).
+% Oberon Day-West (21501990).
+
+%% Multitap Delay Effect Test
+
+% Parameters (adjust these values as needed)
+m_Delay1 = 0.1; % Delay time in seconds for tap 1
+m_Delay2 = 0.2; % Delay time in seconds for tap 2
+m_Delay3 = 0.3; % Delay time in seconds for tap 3
+m_Delay4 = 0.4; % Delay time in seconds for tap 4
+m_dFeedback1 = 0.5; % Feedback gain for tap 1
+m_dFeedback2 = 0.4; % Feedback gain for tap 2
+m_dFeedback3 = 0.3; % Feedback gain for tap 3
+m_dFeedback4 = 0.2; % Feedback gain for tap 4
+m_dGain1 = 0.7; % Gain for tap 1
+m_dGain2 = 0.6; % Gain for tap 2
+m_dGain3 = 0.5; % Gain for tap 3
+m_dGain4 = 0.4; % Gain for tap 4
+m_WetMix = 0.5; % Wet mix percentage (between 0 and 1)
+m_gainMaster = 1.0; % Master gain
+
+% Impulse test signal
+Fs = 48000; % Sampling rate
+Ts = 1/Fs; % Sampling period
+N = Fs * 2; % Total number of samples for 2 seconds
+impulseSignal = [1; zeros(N-1, 1)];
+
+% Initialize output signal
+out = zeros(N, 1);
+
+% Apply the effect to the impulse signal
+for n = 1:N
+    inputAudio = impulseSignal(n, 1);
+
+    % Delay taps (assuming these are simple delays in this example)
+    delayedSig1 = delayLine(inputAudio, m_Delay1, Fs);
+    delayedSig2 = delayLine(inputAudio, m_Delay2, Fs);
+    delayedSig3 = delayLine(inputAudio, m_Delay3, Fs);
+    delayedSig4 = delayLine(inputAudio, m_Delay4, Fs);
+
+    % Feedback gains for each tap
+    fbGain1 = m_dGain1 * delayedSig1;
+    fbGain2 = m_dGain2 * delayedSig2;
+    fbGain3 = m_dGain3 * delayedSig3;
+    fbGain4 = m_dGain4 * delayedSig4;
+
+    % Sum of all feedback gains is the total signal
+    totalSignal = fbGain1 + fbGain2 + fbGain3 + fbGain4;
+
+    % Mix the dry (original) audio with the wet (effected) audio
+    mixedAudio = (1.0 - m_WetMix) * inputAudio + m_WetMix * totalSignal;
+
+    % Apply gain limiter
+    outputAudio = mixedAudio * (1.0 - m_WetMix * 0.5);
+
+    % Apply allpass filter (assuming this function is defined)
+    allpassOutput = processAllpass(outputAudio);
+
+    % Apply master gain
+    out(n, 1) = allpassOutput * m_gainMaster;
+end
+
+% Plot the original impulse signal
+t_impulseSignal = (0:length(impulseSignal)-1) * Ts;
+subplot(2, 1, 1);
+stem(t_impulseSignal, impulseSignal, 'filled');
+title('Original Impulse Signal');
+xlabel('Time (sec.)');
+ylabel('Amplitude');
+
+% Plot the effected/delayed impulse signal
+t_out = (0:length(out)-1) * Ts;
+subplot(2, 1, 2);
+stem(t_out, out, 'filled');
+title('Effected/Delayed Impulse Signal');
+xlabel('Time (sec.)');
+ylabel('Amplitude');
+
+% Helper function for simple delay
+function delayedSignal = delayLine(signal, delayTime, Fs)
+    delaySamples = round(delayTime * Fs);
+    delayedSignal = [zeros(delaySamples, 1); signal(1:end-delaySamples)];
+end
